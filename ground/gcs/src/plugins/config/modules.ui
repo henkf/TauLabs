@@ -157,7 +157,7 @@
           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This enables Frsky Telemetry&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
          </property>
          <property name="text">
-          <string>Frsky Telemetry</string>
+          <string>FrSky Hub Telemetry</string>
          </property>
         </widget>
        </item>
@@ -168,6 +168,13 @@
          </property>
          <property name="text">
           <string>Light Telemetry</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="cbUAVOFrSkySPortBridge">
+         <property name="text">
+          <string>FrSky S.PORT Telemetry</string>
          </property>
         </widget>
        </item>
@@ -601,13 +608,16 @@
           <item row="2" column="1">
            <widget class="QDoubleSpinBox" name="sb_currentOffSet">
             <property name="suffix">
-             <string>V</string>
+             <string>A</string>
             </property>
             <property name="decimals">
              <number>4</number>
             </property>
             <property name="minimum">
-             <double>-100.000000000000000</double>
+             <double>-200.000000000000000</double>
+            </property>
+            <property name="maximum">
+             <double>200.000000000000000</double>
             </property>
             <property name="singleStep">
              <double>0.100000000000000</double>
@@ -863,8 +873,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>290</width>
-            <height>598</height>
+            <width>392</width>
+            <height>674</height>
            </rect>
           </property>
           <layout class="QGridLayout" name="gridLayout">
