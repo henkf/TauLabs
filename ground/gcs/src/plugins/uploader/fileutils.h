@@ -1,13 +1,13 @@
 /**
  ******************************************************************************
- * @file       devicedescriptorstruct.h
- * @author     Tau Labs, http://taulabs.org, Copyright (C) 2013
- * @see        The GNU Public License (GPL) Version 3
+ *
+ * @file       fileutils.h
+ * @author     Tau Labs, http://taulabs.org, Copyright (C) 2014
  * @addtogroup GCSPlugins GCS Plugins
  * @{
- * @addtogroup UAVObjectUtilPlugin UAVObjectUtil Plugin
+ * @addtogroup Uploader Uploader Plugin
  * @{
- * @brief      The UAVUObjectUtil GCS plugin
+ * @brief File functions helper class (zip, unzip, delete dirs...)
  *****************************************************************************/
 /*
  * This program is free software; you can redistribute it and/or modify
@@ -25,29 +25,21 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-#ifndef DEVICEDESCRIPTORSTRUCT_H
-#define DEVICEDESCRIPTORSTRUCT_H
+#ifndef FILEUTILS_H
+#define FILEUTILS_H
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QFileInfoList>
+#include "3rdparty/quazip/quazipfile.h"
 
-#include "uavobjectutil_global.h"
-#include <QString>
-#include <QPixmap>
-
-class UAVOBJECTUTIL_EXPORT deviceDescriptorStruct
+class FileUtils
 {
 public:
-    QString gitHash;
-    QString gitDate;
-    QString gitTag;
-    QString userDefined;
-    QByteArray fwHash;
-    QByteArray uavoHash;
-    quint8 boardType;
-    quint8 boardRevision;
-    quint16 boardID();
-    static QString idToBoardName(quint16 id);
-    static QPixmap idToBoardPicture(quint16 id);
-    bool certified;
-    deviceDescriptorStruct();
+    FileUtils();
+    static bool removeDir(const QString &dirName);
+    static bool archive(const QString &filePath, const QDir &dir, const QString &directory, const QString &comment);
+    static bool extractAll(QString zipfile, QDir destination);
 };
 
-#endif // DEVICEDESCRIPTORSTRUCT_H
+#endif // FILEUTILS_H
