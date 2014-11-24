@@ -62,7 +62,6 @@ public:
     int getHomeLocation(bool &set, double LLA[3]);
 
     int getGPSPosition(double LLA[3]);
-
     int getBoardModel();
     Core::IBoardType* getBoardType();
     QByteArray getBoardCPUSerial();
@@ -72,7 +71,6 @@ public:
     static bool descriptionToStructure(QByteArray desc,deviceDescriptorStruct & struc);
     UAVObjectManager* getObjectManager();
     void saveObjectToFlash(UAVObject *obj);
-
     QMap<QString, UAVObject::Metadata> readMetadata(metadataSetEnum metadataReadType);
     QMap<QString, UAVObject::Metadata> readAllNonSettingsMetadata();
     bool setMetadata(QMap<QString, UAVObject::Metadata>, metadataSetEnum metadataUpdateType);
@@ -82,29 +80,26 @@ public:
     void versionMatchCheck();
 protected:
     FirmwareIAPObj::DataFields getFirmwareIap();
-
 signals:
     void saveCompleted(int objectID, bool status);
-    void completedMetadataWrite();
+    void completedMetadataWrite(bool);
 
 private:
-
     QMutex *mutex;
     QQueue<UAVObject *> queue;
     enum {IDLE, AWAITING_ACK, AWAITING_COMPLETED} saveState;
     void saveNextObject();
     QTimer failureTimer;
-
     ExtensionSystem::PluginManager *pm;
     UAVObjectManager *obm;
     UAVObjectUtilManager *obum;
-    QMap<QString, UAVObject::Metadata> metadataChecklist;
+    QMap<UAVDataObject*, UAVObject::Metadata> metadataSendlist;
+    bool metadataSendSuccess;
     QErrorMessage *incompatibleMsg;
 private slots:
     void objectPersistenceTransactionCompleted(UAVObject* obj, bool success);
     void objectPersistenceUpdated(UAVObject * obj);
     void objectPersistenceOperationFailed();
-
     void metadataTransactionCompleted(UAVObject*, bool);
 };
 

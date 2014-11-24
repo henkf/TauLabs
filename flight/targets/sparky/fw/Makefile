@@ -1,6 +1,6 @@
 ###############################################################################
 # @file       Makefile
-# @author     Tau Labs, http://taulabs.org, Copyright (C) 2013
+# @author     Tau Labs, http://taulabs.org, Copyright (C) 2013-2014
 # @addtogroup
 # @{
 # @addtogroup
@@ -53,7 +53,6 @@ OPTMODULES += UAVOMavlinkBridge
 OPTMODULES += UAVOLighttelemetryBridge 
 OPTMODULES += Battery
 OPTMODULES += ComUsbBridge
-OPTMODULES += UAVORelay
 OPTMODULES += Airspeed/revolution
 OPTMODULES += UAVOHoTTBridge
 OPTMODULES += UAVOFrSKYSensorHubBridge
@@ -146,6 +145,9 @@ SRC += $(PIOSCOMMON)/pios_dma.c
 SRC += $(PIOSCOMMON)/pios_adc.c
 SRC += $(PIOSCOMMON)/pios_heap.c
 SRC += $(PIOSCOMMON)/pios_semaphore.c
+SRC += $(PIOSCOMMON)/pios_mutex.c
+SRC += $(PIOSCOMMON)/pios_thread.c
+SRC += $(PIOSCOMMON)/pios_queue.c
 
 
 include ./UAVObjects.inc

@@ -66,6 +66,7 @@
 #define PIOS_INCLUDE_ETASV3
 #define PIOS_INCLUDE_MPXV5004
 #define PIOS_INCLUDE_MPXV7002
+#define PIOS_INCLUDE_BMP085
 #define FLASH_FREERTOS
 /* Com systems to include */
 #define PIOS_INCLUDE_COM
@@ -112,7 +113,7 @@
 #define CPULOAD_LIMIT_CRITICAL		95
 
 /* Task stack sizes */
-#define PIOS_EVENTDISPATCHER_STACK_SIZE	256
+#define PIOS_EVENTDISPATCHER_STACK_SIZE	1024
 
 /*
  * This has been calibrated 2013/03/11 using next @ 6d21c7a590619ebbc074e60cab5e134e65c9d32b.

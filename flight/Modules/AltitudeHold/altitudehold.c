@@ -53,15 +53,17 @@
 #include "positionactual.h"
 #include "velocityactual.h"
 #include "modulesettings.h"
+#include "pios_thread.h"
+#include "pios_queue.h"
 
 // Private constants
 #define MAX_QUEUE_SIZE 4
 #define STACK_SIZE_BYTES 540
-#define TASK_PRIORITY (tskIDLE_PRIORITY+1)
+#define TASK_PRIORITY PIOS_THREAD_PRIO_LOW
 
 // Private variables
-static xTaskHandle altitudeHoldTaskHandle;
-static xQueueHandle queue;
+static struct pios_thread *altitudeHoldTaskHandle;
+static struct pios_queue *queue;
 static bool module_enabled;
 
 // Private functions
@@ -75,7 +77,7 @@ int32_t AltitudeHoldStart()
 {
 	// Start main task if it is enabled
 	if (module_enabled) {
-		xTaskCreate(altitudeHoldTask, (signed char *)"AltitudeHold", STACK_SIZE_BYTES/4, NULL, TASK_PRIORITY, &altitudeHoldTaskHandle);
+		altitudeHoldTaskHandle = PIOS_Thread_Create(altitudeHoldTask, "AltitudeHold", STACK_SIZE_BYTES, NULL, TASK_PRIORITY);
 		TaskMonitorAdd(TASKINFO_RUNNING_ALTITUDEHOLD, altitudeHoldTaskHandle);
 		return 0;
 	}
@@ -106,7 +108,7 @@ int32_t AltitudeHoldInitialize()
 		AltitudeHoldDesiredInitialize();
 
 		// Create object queue
-		queue = xQueueCreate(MAX_QUEUE_SIZE, sizeof(UAVObjEvent));
+		queue = PIOS_Queue_Create(MAX_QUEUE_SIZE, sizeof(UAVObjEvent));
 
 		return 0;
 	}
@@ -146,7 +148,7 @@ static void altitudeHoldTask(void *parameters)
 	uint32_t timeout = dt_ms;
 
 	while (1) {
-		if ( xQueueReceive(queue, &ev, MS2TICKS(timeout)) != pdTRUE ) {
+		if (PIOS_Queue_Receive(queue, &ev, timeout) != true) {
 
 		} else if (ev.obj == FlightStatusHandle()) {
 

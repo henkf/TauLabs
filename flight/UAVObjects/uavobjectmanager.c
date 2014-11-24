@@ -7,7 +7,7 @@
  *
  * @file       uavobjectmanager.c
  * @author     The OpenPilot Team, http://www.openpilot.org Copyright (C) 2010.
- * @author     Tau Labs, http://taulabs.org, Copyright (C) 2012-2013
+ * @author     Tau Labs, http://taulabs.org, Copyright (C) 2012-2014
  * @brief      Object manager library. This library holds a collection of all objects.
  *             It can be used by all modules/libraries to find an object reference.
  * @see        The GNU Public License (GPL) Version 3
@@ -32,6 +32,8 @@
 #include "openpilot.h"
 #include "pios_struct_helper.h"
 #include "pios_heap.h"		/* PIOS_malloc_no_dma */
+#include "pios_mutex.h"
+#include "pios_queue.h"
 
 extern uintptr_t pios_uavo_settings_fs_id;
 
@@ -50,7 +52,7 @@ extern uintptr_t pios_uavo_settings_fs_id;
 typedef void* InstanceHandle; 
 
 struct ObjectEventEntry {
-	xQueueHandle              queue;
+	struct pios_queue         *queue;
 	UAVObjEventCallback       cb;
 	uint8_t                   eventMask;
 	struct ObjectEventEntry * next;
@@ -154,14 +156,14 @@ static int32_t sendEvent(struct UAVOBase * obj, uint16_t instId,
 			UAVObjEventType event);
 static InstanceHandle createInstance(struct UAVOData * obj, uint16_t instId);
 static InstanceHandle getInstance(struct UAVOData * obj, uint16_t instId);
-static int32_t connectObj(UAVObjHandle obj_handle, xQueueHandle queue,
+static int32_t connectObj(UAVObjHandle obj_handle, struct pios_queue *queue,
 			UAVObjEventCallback cb, uint8_t eventMask);
-static int32_t disconnectObj(UAVObjHandle obj_handle, xQueueHandle queue,
+static int32_t disconnectObj(UAVObjHandle obj_handle, struct pios_queue *queue,
 			UAVObjEventCallback cb);
 
 // Private variables
 static struct UAVOData * uavo_list;
-static xSemaphoreHandle mutex;
+static struct pios_recursive_mutex *mutex;
 static const UAVObjMetadata defMetadata = {
 	.flags = (ACCESS_READWRITE << UAVOBJ_ACCESS_SHIFT |
 		ACCESS_READWRITE << UAVOBJ_GCS_ACCESS_SHIFT |
@@ -189,7 +191,7 @@ int32_t UAVObjInitialize()
 	memset(&stats, 0, sizeof(UAVObjStats));
 
 	// Create mutex
-	mutex = xSemaphoreCreateRecursiveMutex();
+	mutex = PIOS_Recursive_Mutex_Create();
 	if (mutex == NULL)
 		return -1;
 	// Done
@@ -206,9 +208,9 @@ int32_t UAVObjInitialize()
  */
 void UAVObjGetStats(UAVObjStats * statsOut)
 {
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	memcpy(statsOut, &stats, sizeof(UAVObjStats));
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 }
 
 /**
@@ -216,9 +218,9 @@ void UAVObjGetStats(UAVObjStats * statsOut)
  */
 void UAVObjClearStats()
 {
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	memset(&stats, 0, sizeof(UAVObjStats));
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 }
 
 /************************
@@ -309,7 +311,7 @@ UAVObjHandle UAVObjRegister(uint32_t id,
 {
 	struct UAVOData * uavo_data = NULL;
 
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	/* Don't allow duplicate registrations */
 	if (UAVObjGetByID(id))
@@ -354,7 +356,7 @@ UAVObjHandle UAVObjRegister(uint32_t id,
 	UAVObjInstanceUpdated((UAVObjHandle) &(uavo_data->metaObj), 0);
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return (UAVObjHandle) uavo_data;
 }
 
@@ -368,7 +370,7 @@ UAVObjHandle UAVObjGetByID(uint32_t id)
 	UAVObjHandle * found_obj = (UAVObjHandle *) NULL;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	// Look for object
 	struct UAVOData * tmp_obj;
@@ -384,7 +386,7 @@ UAVObjHandle UAVObjGetByID(uint32_t id)
 	}
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return found_obj;
 }
 
@@ -499,7 +501,7 @@ uint16_t UAVObjCreateInstance(UAVObjHandle obj_handle, UAVObjInitializeCallback 
 	}
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	InstanceHandle instEntry;
 	uint16_t instId = 0;
@@ -516,8 +518,9 @@ uint16_t UAVObjCreateInstance(UAVObjHandle obj_handle, UAVObjInitializeCallback 
 		initCb(obj_handle, instId);
 	}
 
-	unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+unlock_exit:
+	PIOS_Recursive_Mutex_Unlock(mutex);
+
 	return instId;
 }
 
@@ -579,7 +582,7 @@ int32_t UAVObjUnpack(UAVObjHandle obj_handle, uint16_t instId,
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -614,7 +617,7 @@ int32_t UAVObjUnpack(UAVObjHandle obj_handle, uint16_t instId,
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -630,7 +633,7 @@ int32_t UAVObjPack(UAVObjHandle obj_handle, uint16_t instId, uint8_t * dataOut)
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -658,7 +661,7 @@ int32_t UAVObjPack(UAVObjHandle obj_handle, uint16_t instId, uint8_t * dataOut)
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -855,7 +858,7 @@ int32_t UAVObjSaveSettings()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -874,7 +877,7 @@ int32_t UAVObjSaveSettings()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -887,7 +890,7 @@ int32_t UAVObjLoadSettings()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -906,7 +909,7 @@ int32_t UAVObjLoadSettings()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -919,7 +922,7 @@ int32_t UAVObjDeleteSettings()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -938,7 +941,7 @@ int32_t UAVObjDeleteSettings()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -951,7 +954,7 @@ int32_t UAVObjSaveMetaobjects()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -967,7 +970,7 @@ int32_t UAVObjSaveMetaobjects()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -980,7 +983,7 @@ int32_t UAVObjLoadMetaobjects()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -996,7 +999,7 @@ int32_t UAVObjLoadMetaobjects()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1009,7 +1012,7 @@ int32_t UAVObjDeleteMetaobjects()
 	struct UAVOData *obj;
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -1025,7 +1028,7 @@ int32_t UAVObjDeleteMetaobjects()
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1086,7 +1089,7 @@ int32_t UAVObjSetInstanceData(UAVObjHandle obj_handle, uint16_t instId,
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -1120,7 +1123,7 @@ int32_t UAVObjSetInstanceData(UAVObjHandle obj_handle, uint16_t instId,
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1136,7 +1139,7 @@ int32_t UAVObjSetInstanceDataField(UAVObjHandle obj_handle, uint16_t instId, con
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -1186,7 +1189,7 @@ int32_t UAVObjSetInstanceDataField(UAVObjHandle obj_handle, uint16_t instId, con
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1203,7 +1206,7 @@ int32_t UAVObjGetInstanceData(UAVObjHandle obj_handle, uint16_t instId,
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -1233,7 +1236,7 @@ int32_t UAVObjGetInstanceData(UAVObjHandle obj_handle, uint16_t instId,
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1249,7 +1252,7 @@ int32_t UAVObjGetInstanceDataField(UAVObjHandle obj_handle, uint16_t instId, voi
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	int32_t rc = -1;
 
@@ -1291,7 +1294,7 @@ int32_t UAVObjGetInstanceDataField(UAVObjHandle obj_handle, uint16_t instId, voi
 	rc = 0;
 
 unlock_exit:
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return rc;
 }
 
@@ -1310,11 +1313,11 @@ int32_t UAVObjSetMetadata(UAVObjHandle obj_handle, const UAVObjMetadata * dataIn
 		return -1;
 	}
 
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	UAVObjSetData((UAVObjHandle) MetaObjectPtr((struct UAVOData *)obj_handle), dataIn);
 
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return 0;
 }
 
@@ -1329,7 +1332,7 @@ int32_t UAVObjGetMetadata(UAVObjHandle obj_handle, UAVObjMetadata * dataOut)
 	PIOS_Assert(obj_handle);
 
 	// Lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	// Get metadata
 	if (UAVObjIsMetaobject(obj_handle)) {
@@ -1340,7 +1343,7 @@ int32_t UAVObjGetMetadata(UAVObjHandle obj_handle, UAVObjMetadata * dataOut)
 	}
 
 	// Unlock
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return 0;
 }
 
@@ -1497,15 +1500,15 @@ int8_t UAVObjReadOnly(UAVObjHandle obj_handle)
  * \param[in] eventMask The event mask, if EV_MASK_ALL_UPDATES then all events are enabled (e.g. EV_UPDATED | EV_UPDATED_MANUAL)
  * \return 0 if success or -1 if failure
  */
-int32_t UAVObjConnectQueue(UAVObjHandle obj_handle, xQueueHandle queue,
+int32_t UAVObjConnectQueue(UAVObjHandle obj_handle, struct pios_queue *queue,
 			uint8_t eventMask)
 {
 	PIOS_Assert(obj_handle);
 	PIOS_Assert(queue);
 	int32_t res;
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	res = connectObj(obj_handle, queue, 0, eventMask);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return res;
 }
 
@@ -1515,14 +1518,14 @@ int32_t UAVObjConnectQueue(UAVObjHandle obj_handle, xQueueHandle queue,
  * \param[in] queue The event queue
  * \return 0 if success or -1 if failure
  */
-int32_t UAVObjDisconnectQueue(UAVObjHandle obj_handle, xQueueHandle queue)
+int32_t UAVObjDisconnectQueue(UAVObjHandle obj_handle, struct pios_queue *queue)
 {
 	PIOS_Assert(obj_handle);
 	PIOS_Assert(queue);
 	int32_t res;
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	res = disconnectObj(obj_handle, queue, 0);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return res;
 }
 
@@ -1539,9 +1542,9 @@ int32_t UAVObjConnectCallback(UAVObjHandle obj_handle, UAVObjEventCallback cb,
 {
 	PIOS_Assert(obj_handle);
 	int32_t res;
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	res = connectObj(obj_handle, 0, cb, eventMask);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return res;
 }
 
@@ -1555,9 +1558,9 @@ int32_t UAVObjDisconnectCallback(UAVObjHandle obj_handle, UAVObjEventCallback cb
 {
 	PIOS_Assert(obj_handle);
 	int32_t res;
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	res = disconnectObj(obj_handle, 0, cb);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return res;
 }
 
@@ -1580,9 +1583,9 @@ void UAVObjRequestUpdate(UAVObjHandle obj_handle)
 void UAVObjRequestInstanceUpdate(UAVObjHandle obj_handle, uint16_t instId)
 {
 	PIOS_Assert(obj_handle);
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	sendEvent((struct UAVOBase *) obj_handle, instId, EV_UPDATE_REQ);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 }
 
 /**
@@ -1602,9 +1605,9 @@ void UAVObjUpdated(UAVObjHandle obj_handle)
 void UAVObjInstanceUpdated(UAVObjHandle obj_handle, uint16_t instId)
 {
 	PIOS_Assert(obj_handle);
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 	sendEvent((struct UAVOBase *) obj_handle, instId, EV_UPDATED_MANUAL);
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 }
 
 /**
@@ -1617,7 +1620,7 @@ void UAVObjIterate(void (*iterator) (UAVObjHandle obj))
 	PIOS_Assert(iterator);
 
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	// Iterate through the list and invoke iterator for each object
 	struct UAVOData *obj;
@@ -1627,7 +1630,7 @@ void UAVObjIterate(void (*iterator) (UAVObjHandle obj))
 	}
 
 	// Release lock
-	xSemaphoreGiveRecursive(mutex);
+	PIOS_Recursive_Mutex_Unlock(mutex);
 }
 
 /**
@@ -1651,7 +1654,7 @@ static int32_t sendEvent(struct UAVOBase * obj, uint16_t instId,
 			// Send to queue if a valid queue is registered
 			if (event->queue) {
 				// will not block
-				if (xQueueSend(event->queue, &msg, 0) != pdTRUE) {
+				if (PIOS_Queue_Send(event->queue, &msg, 0) != true) {
 					stats.lastQueueErrorID = UAVObjGetID(obj);
 					++stats.eventQueueErrors;
 				}
@@ -1660,7 +1663,7 @@ static int32_t sendEvent(struct UAVOBase * obj, uint16_t instId,
 			// Invoke callback (from event task) if a valid one is registered
 			if (event->cb) {
 				// invoke callback from the event task, will not block
-				if (EventCallbackDispatch(&msg, event->cb) != pdTRUE) {
+				if (EventCallbackDispatch(&msg, event->cb) != 0) {
 					++stats.eventCallbackErrors;
 					stats.lastCallbackErrorID = UAVObjGetID(obj);
 				}
@@ -1773,7 +1776,7 @@ static InstanceHandle getInstance(struct UAVOData * obj, uint16_t instId)
  * \param[in] eventMask The event mask, if EV_MASK_ALL_UPDATES then all events are enabled (e.g. EV_UPDATED | EV_UPDATED_MANUAL)
  * \return 0 if success or -1 if failure
  */
-static int32_t connectObj(UAVObjHandle obj_handle, xQueueHandle queue,
+static int32_t connectObj(UAVObjHandle obj_handle, struct pios_queue *queue,
 			UAVObjEventCallback cb, uint8_t eventMask)
 {
 	struct ObjectEventEntry *event;
@@ -1810,7 +1813,7 @@ static int32_t connectObj(UAVObjHandle obj_handle, xQueueHandle queue,
  * \param[in] cb The event callback
  * \return 0 if success or -1 if failure
  */
-static int32_t disconnectObj(UAVObjHandle obj_handle, xQueueHandle queue,
+static int32_t disconnectObj(UAVObjHandle obj_handle, struct pios_queue *queue,
 			UAVObjEventCallback cb)
 {
 	struct ObjectEventEntry *event;
@@ -1822,7 +1825,7 @@ static int32_t disconnectObj(UAVObjHandle obj_handle, xQueueHandle queue,
 		if ((event->queue == queue
 				&& event->cb == cb)) {
 			LL_DELETE(obj->next_event, event);
-			vPortFree(event);
+			PIOS_free(event);
 			return 0;
 		}
 	}
@@ -1838,7 +1841,7 @@ static int32_t disconnectObj(UAVObjHandle obj_handle, xQueueHandle queue,
  * \param[in] queue The event queue
  * \return eventMask The event mask, if EV_MASK_ALL then all events are disabled
  */
-int32_t getEventMask(UAVObjHandle obj_handle, xQueueHandle queue)
+int32_t getEventMask(UAVObjHandle obj_handle, struct pios_queue *queue)
 {
 	struct ObjectEventEntry *event;
 	struct UAVOBase *obj;
@@ -1866,7 +1869,7 @@ uint8_t UAVObjCount()
 {
 	uint8_t count = 0;
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	// Look for object
 	struct UAVOData * tmp_obj;
@@ -1874,7 +1877,8 @@ uint8_t UAVObjCount()
 		++count;
 	}
 
-	xSemaphoreGiveRecursive(mutex);
+	// Release lock
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return count;
 }
 
@@ -1886,19 +1890,22 @@ uint32_t UAVObjIDByIndex(uint8_t index)
 {
 	uint8_t count = 0;
 	// Get lock
-	xSemaphoreTakeRecursive(mutex, portMAX_DELAY);
+	PIOS_Recursive_Mutex_Lock(mutex, PIOS_MUTEX_TIMEOUT_MAX);
 
 	// Look for object
 	struct UAVOData * tmp_obj;
 	LL_FOREACH(uavo_list, tmp_obj) {
 		if (count == index)
 		{
-			xSemaphoreGiveRecursive(mutex);
+			// Release lock
+			PIOS_Recursive_Mutex_Unlock(mutex);
 			return tmp_obj->id;
 		}
 		++count;
 	}
-	xSemaphoreGiveRecursive(mutex);
+
+	// Release lock
+	PIOS_Recursive_Mutex_Unlock(mutex);
 	return 0;
 }
 

@@ -1,6 +1,9 @@
 # Makefile for Taulabs project
 .DEFAULT_GOAL := help
 
+WHEREAMI := $(dir $(lastword $(MAKEFILE_LIST)))
+ROOT_DIR := $(realpath $(WHEREAMI)/ )
+
 # import macros common to all supported build systems
 include $(CURDIR)/make/system-id.mk
 
@@ -210,6 +213,7 @@ help:
 	@echo
 	@echo "   [Package]"
 	@echo "     package              - Executes a make all_clean and then generates a complete package build for"
+	@echo "     standalone           - Executes a make all_clean and compiles a package without packaging"
 	@echo "                            the GCS and all target board firmwares."
 	@echo
 	@echo "   [Misc]"
@@ -293,7 +297,7 @@ uavobjgenerator:
 	  $(MAKE) --no-print-directory -w ; \
 	)
 
-UAVOBJ_TARGETS := gcs flight python matlab java wireshark
+UAVOBJ_TARGETS := gcs flight matlab java wireshark
 .PHONY:uavobjects
 uavobjects:  $(addprefix uavobjects_, $(UAVOBJ_TARGETS))
 
@@ -396,7 +400,7 @@ androidgcs_clean:
 #
 # Find the git hashes of each commit that changes uavobjects with:
 #   git log --format=%h -- shared/uavobjectdefinition/ | head -n 6 | tr '\n' ' '
-UAVO_GIT_VERSIONS := next 
+UAVO_GIT_VERSIONS := HEAD 
 
 # All versions includes a pseudo collection called "working" which represents
 # the UAVOs in the source tree
@@ -892,7 +896,7 @@ $(eval $(call SIM_TEMPLATE,openpilot,OpenPilot,'op  ',win32,exe))
 #
 ##############################
 
-ALL_UNITTESTS := logfs i2c_vm misc_math sin_lookup coordinate_conversions
+ALL_UNITTESTS := logfs i2c_vm misc_math sin_lookup coordinate_conversions error_correcting
 ALL_PYTHON_UNITTESTS := python_ut_test
 
 UT_OUT_DIR := $(BUILD_DIR)/unit_tests
@@ -991,6 +995,10 @@ endif
 .PHONY: package
 package:
 	$(V1) cd $@ && $(MAKE) --no-print-directory $@
+	
+.PHONY: standalone
+standalone:
+	$(V1) cd package && $(MAKE) --no-print-directory $@
 
 .PHONY: package_resources
 package_resources:

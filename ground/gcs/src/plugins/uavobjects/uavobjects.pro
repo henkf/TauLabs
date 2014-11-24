@@ -68,6 +68,7 @@ HEADERS += $$UAVOBJECT_SYNTHETICS/accels.h \
     $$UAVOBJECT_SYNTHETICS/gyrosbias.h \
     $$UAVOBJECT_SYNTHETICS/homelocation.h \
     $$UAVOBJECT_SYNTHETICS/hottsettings.h \
+    $$UAVOBJECT_SYNTHETICS/hwcolibri.h \
     $$UAVOBJECT_SYNTHETICS/hwcoptercontrol.h \
     $$UAVOBJECT_SYNTHETICS/hwdiscoveryf4.h \
     $$UAVOBJECT_SYNTHETICS/hwfreedom.h \
@@ -77,6 +78,7 @@ HEADERS += $$UAVOBJECT_SYNTHETICS/accels.h \
     $$UAVOBJECT_SYNTHETICS/hwrevolution.h \
     $$UAVOBJECT_SYNTHETICS/hwrevomini.h \
     $$UAVOBJECT_SYNTHETICS/hwsparky.h \
+    $$UAVOBJECT_SYNTHETICS/hwsparkybgc.h \
     $$UAVOBJECT_SYNTHETICS/i2cvm.h \
     $$UAVOBJECT_SYNTHETICS/i2cvmuserprogram.h \
     $$UAVOBJECT_SYNTHETICS/inssettings.h \
@@ -89,6 +91,7 @@ HEADERS += $$UAVOBJECT_SYNTHETICS/accels.h \
     $$UAVOBJECT_SYNTHETICS/mixersettings.h \
     $$UAVOBJECT_SYNTHETICS/mixerstatus.h \
     $$UAVOBJECT_SYNTHETICS/modulesettings.h \
+    $$UAVOBJECT_SYNTHETICS/mwratesettings.h \
     $$UAVOBJECT_SYNTHETICS/nedaccel.h \
     $$UAVOBJECT_SYNTHETICS/nedposition.h \
     $$UAVOBJECT_SYNTHETICS/objectpersistence.h \
@@ -176,6 +179,7 @@ SOURCES += $$UAVOBJECT_SYNTHETICS/accels.cpp \
     $$UAVOBJECT_SYNTHETICS/gyrosbias.cpp \
     $$UAVOBJECT_SYNTHETICS/homelocation.cpp \
     $$UAVOBJECT_SYNTHETICS/hottsettings.cpp \
+    $$UAVOBJECT_SYNTHETICS/hwcolibri.cpp \
     $$UAVOBJECT_SYNTHETICS/hwcoptercontrol.cpp \
     $$UAVOBJECT_SYNTHETICS/hwdiscoveryf4.cpp \
     $$UAVOBJECT_SYNTHETICS/hwfreedom.cpp \
@@ -185,6 +189,7 @@ SOURCES += $$UAVOBJECT_SYNTHETICS/accels.cpp \
     $$UAVOBJECT_SYNTHETICS/hwrevolution.cpp \
     $$UAVOBJECT_SYNTHETICS/hwrevomini.cpp \
     $$UAVOBJECT_SYNTHETICS/hwsparky.cpp \
+    $$UAVOBJECT_SYNTHETICS/hwsparkybgc.cpp \
     $$UAVOBJECT_SYNTHETICS/i2cvm.cpp \
     $$UAVOBJECT_SYNTHETICS/i2cvmuserprogram.cpp \
     $$UAVOBJECT_SYNTHETICS/inssettings.cpp \
@@ -197,6 +202,7 @@ SOURCES += $$UAVOBJECT_SYNTHETICS/accels.cpp \
     $$UAVOBJECT_SYNTHETICS/mixersettings.cpp \
     $$UAVOBJECT_SYNTHETICS/mixerstatus.cpp \
     $$UAVOBJECT_SYNTHETICS/modulesettings.cpp \
+    $$UAVOBJECT_SYNTHETICS/mwratesettings.cpp \
     $$UAVOBJECT_SYNTHETICS/nedaccel.cpp \
     $$UAVOBJECT_SYNTHETICS/nedposition.cpp \
     $$UAVOBJECT_SYNTHETICS/objectpersistence.cpp \
