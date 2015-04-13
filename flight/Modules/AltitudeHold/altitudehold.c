@@ -58,7 +58,7 @@
 
 // Private constants
 #define MAX_QUEUE_SIZE 4
-#define STACK_SIZE_BYTES 540
+#define STACK_SIZE_BYTES 600
 #define TASK_PRIORITY PIOS_THREAD_PRIO_LOW
 
 // Private variables
@@ -160,6 +160,13 @@ static void altitudeHoldTask(void *parameters)
 				StabilizationDesiredThrottleGet(&velocity_pid.iAccumulator);
 				velocity_pid.iAccumulator *= 1000.0f; // pid library scales up accumulator by 1000
 				engaged = true;
+
+				// Make sure this uses a valid AltitudeHoldDesired. No delay is really required here
+				// because ManualControl sets AltitudeHoldDesired first before the FlightStatus, but
+				// this is just to be conservative at 1ms when engaging will not bother the pilot.
+				PIOS_Thread_Sleep(1);
+				AltitudeHoldDesiredGet(&altitudeHoldDesired);
+
 			} else if (flight_mode != FLIGHTSTATUS_FLIGHTMODE_ALTITUDEHOLD)
 				engaged = false;
 

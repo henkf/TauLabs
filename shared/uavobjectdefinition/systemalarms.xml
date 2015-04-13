@@ -23,6 +23,8 @@
 				<elementname>GPS</elementname>
                 		<elementname>AltitudeHold</elementname>
 				<elementname>BootFault</elementname>
+				<elementname>TempBaro</elementname>
+				<elementname>GyroBias</elementname>
 			</elementnames>
 		</field>
 		<field name="ConfigError" units="" type="enum" elements="1" defaultvalue="None">
