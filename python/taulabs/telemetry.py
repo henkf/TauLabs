@@ -1,4 +1,9 @@
-"""Interface to telemetry streams -- log, network, or serial."""
+"""
+Interface to telemetry streams -- log, network, or serial.
+
+Copyright (C) 2014-2015 Tau Labs, http://taulabs.org
+Licensed under the GNU LGPL version 2.1 or any later version (see COPYING.LESSER)
+"""
 
 import socket
 import time
@@ -49,7 +54,9 @@ class TelemetryBase():
         if githash:
             uavo_defs.from_git_hash(githash)
         else:
-            uavo_defs.from_uavo_xml_path("shared/uavobjectdefinition")
+            xml_path = os.path.join(os.path.dirname(__file__), "..", "..",
+                                    "shared", "uavobjectdefinition")
+            uavo_defs.from_uavo_xml_path(xml_path)
 
         self.githash = githash
 
@@ -71,7 +78,9 @@ class TelemetryBase():
         self.do_handshaking = do_handshaking
         self.filename = name
 
-    def as_numpy_array(self, match_class): 
+        self.eof = False
+
+    def as_numpy_array(self, match_class):
         """ Transforms all received instances of a given object to a numpy array.
         
         match_class: the UAVO_* class you'd like to match.
@@ -79,24 +88,14 @@ class TelemetryBase():
 
         import numpy as np
 
-        # Find the subset of this list that is of the requested class 
-        filtered_list = filter(lambda x: isinstance(x, match_class), self) 
+        # Find the subset of this list that is of the requested class
+        filtered_list = filter(lambda x: isinstance(x, match_class), self)
  
-        # Check for an empty list 
-        if filtered_list == []: 
-            return np.array([]) 
+        # Check for an empty list
+        if filtered_list == []:
+            return np.array([])
  
-        # Find the uavo definition associated with this UAVO type 
-        if not "{0:08x}".format(filtered_list[0].uavo_id) in self.uavo_defs: 
-            dtype = None 
-        else: 
-            uavo_def = self.uavo_defs["{0:08x}".format(filtered_list[0].uavo_id)] 
-            dtype  = [('name', 'S20'), ('time', 'double'), ('uavo_id', 'uint')] 
- 
-            for f in uavo_def.fields: 
-                dtype += [(f['name'], '(' + `f['elements']` + ",)" + uavo_def.type_numpy_map[f['type']])] 
- 
-        return np.array(filtered_list, dtype=dtype) 
+        return np.array(filtered_list, dtype=match_class._dtype)
 
     def __iter__(self):
         """ Iterator service routine. """
@@ -167,7 +166,13 @@ class TelemetryBase():
 
             self._send(uavtalk.send_object(send_obj))
 
-    def __handleFrames(self, frames):
+    def request_object(self, obj):
+        if not self.do_handshaking:
+            raise ValueError("Can only request on handshaking/bidir sessions")
+
+        self._send(uavtalk.request_object(obj))
+
+    def __handle_frames(self, frames):
         objs = []
 
         obj = self.uavtalk_generator.send(frames)
@@ -187,8 +192,11 @@ class TelemetryBase():
             # for now-- in case we wanna see
             self.uavo_list.extend(objs)
 
+            if frames == '':
+                self.eof=True
+
             for obj in objs:
-                self.last_values[obj.name]=obj
+                self.last_values[obj.__class__]=obj
 
             self.cond.notifyAll()
 
@@ -210,7 +218,7 @@ class TelemetryBase():
 
         def run():
             while not self._done():
-                self.service_connection()    
+                self.service_connection()
 
         t = Thread(target=run, name="telemetry svc thread")
 
@@ -230,7 +238,7 @@ class TelemetryBase():
             finish_time = None
 
         data = self._receive(finish_time)
-        self.__handleFrames(data)
+        self.__handle_frames(data)
 
     @abstractmethod
     def _receive(self, finish_time):
@@ -240,9 +248,9 @@ class TelemetryBase():
     def _send(self, msg):
         return
 
-    @abstractmethod
     def _done(self):
-        return True
+        with self.cond:
+            return self.eof
 
 class FDTelemetry(TelemetryBase):
     """
@@ -301,7 +309,7 @@ class FDTelemetry(TelemetryBase):
             wrSet.append(self.fd)
 
         now = time.time()
-        if finish_time is None: 
+        if finish_time is None:
             r,w,e = select.select(rdSet, wrSet, [])
         else:
             tm = finish_time-now
@@ -336,9 +344,6 @@ class FDTelemetry(TelemetryBase):
         self.send_buf += msg
 
         self._do_io(0)
-
-    def _done(self):
-        return self.fd is None
 
 class NetworkTelemetry(FDTelemetry):
     """ TCP telemetry interface. """
@@ -435,15 +440,9 @@ class FileTelemetry(TelemetryBase):
     def _receive(self, finish_time):
         """ Fetch available data from file """
 
-        buf = self.f.read(128)
-
-        if buf == '':
-            self.done=True
+        buf = self.f.read(524288)   # 512k
 
         return buf
-
-    def _done(self):
-        return self.done
 
 def get_telemetry_by_args(desc="Process telemetry"):
     """ Parses command line to decide how to get a telemetry object. """
@@ -452,7 +451,7 @@ def get_telemetry_by_args(desc="Process telemetry"):
     parser = argparse.ArgumentParser(description=desc)
 
     # Log format indicates this log is using the old file format which
-    # embeds the timestamping information between the UAVTalk packet 
+    # embeds the timestamping information between the UAVTalk packet
     # instead of as part of the packet
     parser.add_argument("-t", "--timestamped",
                         action  = 'store_false',

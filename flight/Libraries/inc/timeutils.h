@@ -1,10 +1,14 @@
 /**
  ******************************************************************************
- *
- * @file       cachedsvgitem.h
- * @author     Dmytro Poplavskiy Copyright (C) 2011.
+ * @addtogroup TauLabsLibraries Tau Labs Libraries
  * @{
- * @brief OpenGL texture cached SVG item
+ *
+ * @file       timeutils.h
+ * @author     Tau Labs, http://taulabs.org, Copyright (C) 2015
+ * @brief      Time conversion functions
+ *
+ * @see        The GNU Public License (GPL) Version 3
+ *
  *****************************************************************************/
 /*
  * This program is free software; you can redistribute it and/or modify
@@ -22,33 +26,22 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-#ifndef CACHEDSVGITEM_H
-#define CACHEDSVGITEM_H
+#ifndef _TIMEUTILS_H
+#define _TIMEUTILS_H
 
-#include <QGraphicsSvgItem>
-#include <QGLContext>
+#include <stdint.h>
 
-#include "utils_global.h"
+typedef struct {
+	uint8_t sec;  // seconds after the minute - [0, 60]
+	uint8_t min;  // minutes after the hour - [0, 59]
+	uint8_t hour; // hours since midnight - [0, 23]
+	uint8_t mday; // day of the month - [1, 31]
+	uint8_t mon;  // months since January - [0, 11]
+	uint8_t wday; // days since Sunday - [0, 6]
+	uint8_t year; // years since 1900
+} __attribute__((packed)) DateTimeT;
 
-class QGLContext;
+void date_from_timestamp(uint32_t timestamp, DateTimeT *date_time);
 
-//Cache Svg item as GL Texture.
-//Texture is regenerated each time item is scaled
-//but it's reused during rotation, unlike DeviceCoordinateCache mode
-class QTCREATOR_UTILS_EXPORT CachedSvgItem: public QGraphicsSvgItem
-{
-    Q_OBJECT
-public:
-    CachedSvgItem(QGraphicsItem * parent = 0);
-    CachedSvgItem(const QString & fileName, QGraphicsItem * parent = 0);
-    ~CachedSvgItem();
 
-    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
-
-private:
-    QGLContext *m_context;
-    GLuint m_texture;
-    qreal m_scale;
-};
-
-#endif
+#endif /* _TIMEUTILS_H */
